@@ -24,8 +24,157 @@ API_URL = (
     "?action=parse&page=Guide&prop=text%7Cdisplaytitle&format=json&origin=*"
 )
 CACHE_FILE = Path("/tmp/antimatter-guide.json")
-OUTPUT_FILE = Path(__file__).with_name("antimatter-dimensions-guide.html")
+OUTPUT_FILE = Path(__file__).with_name("index.html")
 USER_AGENT = "Mozilla/5.0 (compatible; offline-reading-copy/1.0)"
+
+PROGRESS_SCRIPT = r"""  <script>
+    (() => {
+      "use strict";
+
+      const COMPLETED_KEY = "antimatter-guide-completed-v1";
+      const POSITION_KEY = "antimatter-guide-position-v1";
+      const headings = [...document.querySelectorAll(".article h2, .article h3, .article h4, .article h5, .article h6")];
+      const progressCount = document.getElementById("progress-count");
+      const progressBar = document.getElementById("progress-bar");
+      const storageStatus = document.getElementById("storage-status");
+      const resetButton = document.getElementById("reset-progress");
+      let completed = new Set();
+      let saveTimer = 0;
+
+      function readJSON(key, fallback) {
+        try {
+          const value = localStorage.getItem(key);
+          return value ? JSON.parse(value) : fallback;
+        } catch (_) {
+          storageStatus.textContent = "Sauvegarde locale indisponible";
+          storageStatus.classList.add("is-error");
+          return fallback;
+        }
+      }
+
+      function writeJSON(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+          storageStatus.textContent = "Sauvegardé sur cet appareil";
+          storageStatus.classList.remove("is-error");
+          return true;
+        } catch (_) {
+          storageStatus.textContent = "Sauvegarde locale indisponible";
+          storageStatus.classList.add("is-error");
+          return false;
+        }
+      }
+
+      function tocItemFor(sectionId) {
+        for (const link of document.querySelectorAll('.toc a[href^="#"]')) {
+          let target = link.getAttribute("href").slice(1);
+          try { target = decodeURIComponent(target); } catch (_) {}
+          if (target === sectionId) return link.closest("li");
+        }
+        return null;
+      }
+
+      function updateProgress() {
+        const count = headings.filter((heading) => completed.has(heading.id)).length;
+        const percent = headings.length ? Math.round((count / headings.length) * 100) : 0;
+        progressCount.textContent = `${count} / ${headings.length} sections terminées`;
+        progressBar.style.width = `${percent}%`;
+        progressBar.parentElement.setAttribute("aria-valuenow", String(percent));
+      }
+
+      function setCompleted(sectionId, isCompleted, persist = true) {
+        if (isCompleted) completed.add(sectionId);
+        else completed.delete(sectionId);
+
+        const heading = document.getElementById(sectionId);
+        const checkbox = heading?.querySelector('.section-done-control input[type="checkbox"]');
+        if (checkbox) checkbox.checked = isCompleted;
+        heading?.classList.toggle("is-complete", isCompleted);
+        tocItemFor(sectionId)?.classList.toggle("is-done", isCompleted);
+
+        updateProgress();
+        if (persist) writeJSON(COMPLETED_KEY, [...completed]);
+      }
+
+      function addSectionControls() {
+        for (const heading of headings) {
+          const control = document.createElement("label");
+          control.className = "section-done-control";
+          control.title = "Marquer cette section comme terminée";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = completed.has(heading.id);
+          checkbox.setAttribute("aria-label", "Section terminée");
+
+          const label = document.createElement("span");
+          label.textContent = "Fait";
+          control.append(checkbox, label);
+          heading.append(" ", control);
+
+          checkbox.addEventListener("change", () => {
+            setCompleted(heading.id, checkbox.checked);
+          });
+
+          setCompleted(heading.id, checkbox.checked, false);
+        }
+      }
+
+      function currentPosition() {
+        const marker = window.scrollY + Math.min(220, window.innerHeight * 0.3);
+        let active = null;
+        for (const heading of headings) {
+          if (heading.offsetTop <= marker) active = heading;
+          else break;
+        }
+        return {
+          scrollY: Math.round(window.scrollY),
+          sectionId: active?.id || "",
+          sectionOffset: active ? Math.round(window.scrollY - active.offsetTop) : 0,
+          savedAt: Date.now()
+        };
+      }
+
+      function savePosition() {
+        writeJSON(POSITION_KEY, currentPosition());
+      }
+
+      function restorePosition() {
+        const saved = readJSON(POSITION_KEY, null);
+        if (!saved) return;
+        let target = Number(saved.scrollY) || 0;
+        const heading = saved.sectionId ? document.getElementById(saved.sectionId) : null;
+        if (heading) target = heading.offsetTop + (Number(saved.sectionOffset) || 0);
+        requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, target), behavior: "auto" }));
+      }
+
+      completed = new Set(readJSON(COMPLETED_KEY, []));
+      addSectionControls();
+      updateProgress();
+
+      if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+      window.addEventListener("load", () => setTimeout(restorePosition, 80), { once: true });
+      window.addEventListener("scroll", () => {
+        window.clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(savePosition, 500);
+      }, { passive: true });
+      window.addEventListener("pagehide", savePosition);
+
+      resetButton.addEventListener("click", () => {
+        if (!window.confirm("Effacer les sections terminées et la dernière position enregistrée ?")) return;
+        completed.clear();
+        try {
+          localStorage.removeItem(COMPLETED_KEY);
+          localStorage.removeItem(POSITION_KEY);
+        } catch (_) {}
+        for (const heading of headings) setCompleted(heading.id, false, false);
+        updateProgress();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        storageStatus.textContent = "Progression réinitialisée";
+      });
+    })();
+  </script>
+"""
 
 
 def fetch(url: str) -> bytes:
@@ -292,6 +441,17 @@ def build_document(article: BeautifulSoup, sections: list[dict[str, str | int]])
     .toc li.toc-level-5, .toc li.toc-level-6 {{ padding-left: 2.55rem; font-size: .74rem; }}
     .toc a {{ color: var(--muted); text-decoration: none; }}
     .toc a:hover {{ color: var(--accent); }}
+    .toc li.is-done a {{ opacity: .62; text-decoration: line-through; }}
+    .toc li.is-done a::after {{ content: " ✓"; color: #55b97a; text-decoration: none; }}
+    .progress-panel {{ padding: .9rem 1rem; border-bottom: 1px solid var(--line); background: var(--bg); }}
+    .progress-count {{ display: block; margin-bottom: .55rem; font-size: .8rem; }}
+    .progress-track {{ height: 6px; overflow: hidden; border-radius: 999px; background: var(--line); }}
+    .progress-track span {{ display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #55b97a); transition: width .2s ease; }}
+    .progress-meta {{ display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .6rem; }}
+    .storage-status {{ color: var(--muted); font-size: .67rem; line-height: 1.25; }}
+    .storage-status.is-error {{ color: #d36b6b; }}
+    .reset-progress {{ padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: .67rem; text-decoration: underline; cursor: pointer; }}
+    .reset-progress:hover {{ color: var(--accent); }}
     .article {{ min-width: 0; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); padding: clamp(1.25rem, 4vw, 3.5rem); box-shadow: var(--shadow); }}
     .article > :first-child {{ margin-top: 0; }}
     h2, h3, h4, h5, h6 {{ line-height: 1.2; letter-spacing: -.02em; scroll-margin-top: 1.5rem; }}
@@ -301,6 +461,10 @@ def build_document(article: BeautifulSoup, sections: list[dict[str, str | int]])
     h5, h6 {{ margin: 1.6rem 0 .55rem; font-size: 1rem; }}
     .heading-anchor {{ opacity: 0; font-weight: 500; text-decoration: none; }}
     h2:hover .heading-anchor, h3:hover .heading-anchor, h4:hover .heading-anchor, h5:hover .heading-anchor, h6:hover .heading-anchor, .heading-anchor:focus {{ opacity: 1; }}
+    .section-done-control {{ display: inline-flex; align-items: center; gap: .3rem; margin-left: .35rem; padding: .28rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .68rem; font-weight: 650; letter-spacing: 0; vertical-align: middle; cursor: pointer; user-select: none; }}
+    .section-done-control:hover {{ border-color: var(--accent); color: var(--accent); }}
+    .section-done-control input {{ width: .9rem; height: .9rem; margin: 0; accent-color: #55b97a; }}
+    .is-complete .section-done-control {{ border-color: #55b97a; background: color-mix(in srgb, #55b97a 14%, transparent); color: #55b97a; }}
     p, ul, ol {{ margin: .85rem 0; }}
     li + li {{ margin-top: .28rem; }}
     img {{ max-width: 100%; height: auto; border-radius: 8px; }}
@@ -335,7 +499,7 @@ def build_document(article: BeautifulSoup, sections: list[dict[str, str | int]])
     @media print {{
       body {{ background: white; color: black; }}
       .page-header {{ padding: 1.5rem 0; background: none; color: black; }}
-      .page-header .eyebrow, .page-header .lede, .toc, .back-to-top {{ display: none; }}
+      .page-header .eyebrow, .page-header .lede, .toc, .back-to-top, .section-done-control {{ display: none; }}
       .layout {{ display: block; max-width: none; padding: 0; }}
       .article {{ border: 0; box-shadow: none; padding: 0; }}
       a {{ color: inherit; }}
@@ -352,6 +516,14 @@ def build_document(article: BeautifulSoup, sections: list[dict[str, str | int]])
     <nav class="toc" aria-label="Table of contents">
       <details open>
         <summary>Table of contents</summary>
+        <div class="progress-panel">
+          <strong class="progress-count" id="progress-count">0 / {len(sections)} sections terminées</strong>
+          <div class="progress-track" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="progress-bar"></span></div>
+          <div class="progress-meta">
+            <span class="storage-status" id="storage-status">Sauvegardé sur cet appareil</span>
+            <button class="reset-progress" id="reset-progress" type="button">Réinitialiser</button>
+          </div>
+        </div>
         <ol>{toc}</ol>
       </details>
     </nav>
@@ -366,6 +538,7 @@ def build_document(article: BeautifulSoup, sections: list[dict[str, str | int]])
     community content is available under
     <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA</a> unless otherwise noted.
   </footer>
+{PROGRESS_SCRIPT}
 </body>
 </html>
 """
