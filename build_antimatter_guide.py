@@ -394,7 +394,8 @@ def build_document(article: BeautifulSoup, sections: list[dict[str, str | int]])
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Antimatter Dimensions — Guide</title>
+  <title>Antimatter Dimensions Eli's Guide</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%236b4eff%27/%3E%3Ctext x=%2732%27 y=%2745%27 text-anchor=%27middle%27 font-size=%2743%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 fill=%27white%27%3E%E2%88%9E%3C/text%3E%3C/svg%3E">
   <style>
     :root {{
       color-scheme: light dark;
@@ -432,13 +433,11 @@ def build_document(article: BeautifulSoup, sections: list[dict[str, str | int]])
     a {{ color: var(--accent); text-underline-offset: .16em; }}
     a:hover {{ text-decoration-thickness: 2px; }}
     .page-header {{
-      padding: clamp(2.5rem, 7vw, 6rem) max(1.2rem, calc((100vw - 1600px) / 2));
+      padding: 1.15rem max(1.2rem, calc((100vw - 1600px) / 2));
       background: linear-gradient(135deg, #141319, #2d235c 58%, #6149dc);
       color: white;
     }}
-    .eyebrow {{ margin: 0 0 .45rem; color: #c9c0ff; font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }}
-    .page-header h1 {{ max-width: 900px; margin: 0; font-size: clamp(2.4rem, 7vw, 5.2rem); line-height: .98; letter-spacing: -.055em; }}
-    .lede {{ max-width: 720px; margin: 1.25rem 0 0; color: #ded9f4; font-size: 1.05rem; }}
+    .page-header h1 {{ margin: 0; font-size: clamp(1.35rem, 3vw, 2rem); line-height: 1.15; letter-spacing: -.025em; }}
     .layout {{ display: grid; grid-template-columns: minmax(250px, 290px) minmax(0, 1fr); gap: clamp(2rem, 3vw, 4rem); max-width: 1600px; margin: 0 auto; padding: 2.5rem 1.2rem 5rem; align-items: start; }}
     .toc {{ position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }}
     .toc summary {{ cursor: pointer; padding: 1rem 1.1rem; font-weight: 800; border-bottom: 1px solid var(--line); }}
@@ -516,9 +515,7 @@ def build_document(article: BeautifulSoup, sections: list[dict[str, str | int]])
 </head>
 <body id="top">
   <header class="page-header">
-    <p class="eyebrow">Offline reading edition</p>
-    <h1>Antimatter Dimensions Guide</h1>
-    <p class="lede">The guide content, cleaned of Fandom navigation, advertisements and interface elements. Generated {generated}.</p>
+    <h1>Antimatter Dimensions Eli's Guide</h1>
   </header>
   <main class="layout">
     <nav class="toc" aria-label="Table of contents">
