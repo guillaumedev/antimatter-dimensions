@@ -113,7 +113,15 @@ PROGRESS_SCRIPT = r"""  <script>
           heading.append(" ", control);
 
           checkbox.addEventListener("change", () => {
-            setCompleted(heading.id, checkbox.checked);
+            if (checkbox.checked) {
+              const currentIndex = headings.indexOf(heading);
+              for (let index = 0; index <= currentIndex; index += 1) {
+                setCompleted(headings[index].id, true, false);
+              }
+              writeJSON(COMPLETED_KEY, [...completed]);
+            } else {
+              setCompleted(heading.id, false);
+            }
           });
 
           setCompleted(heading.id, checkbox.checked, false);
